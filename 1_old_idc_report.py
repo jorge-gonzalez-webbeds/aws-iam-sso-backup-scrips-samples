@@ -1,21 +1,21 @@
 import boto3, json, csv
 
-session = boto3.Session(profile_name='webbeds-idp')
+session = boto3.Session(profile_name="webbeds-idp")
 
-idstoreclient = session.client('identitystore')
-ssoadminclient = session.client('sso-admin')
-orgsclient= session.client('organizations')
+idstoreclient = session.client("identitystore")
+ssoadminclient = session.client("sso-admin")
+orgsclient = session.client("organizations")
 
-users={}
-groups={}
-permissionSets={}
-permissionSetsData={}
-Accounts={}
-applications=[]
+users = {}
+groups = {}
+permissionSets = {}
+permissionSetsData = {}
+Accounts = {}
+applications = []
 
-Instances= (ssoadminclient.list_instances()).get('Instances')
-InstanceARN=Instances[0].get('InstanceArn')
-IdentityStoreId=Instances[0].get('IdentityStoreId')
+Instances = (ssoadminclient.list_instances()).get("Instances")
+InstanceARN = Instances[0].get("InstanceArn")
+IdentityStoreId = Instances[0].get("IdentityStoreId")
 
 
 def mapUserIDs():
@@ -29,13 +29,15 @@ def mapUserIDs():
     Note:
         This function uses pagination to handle large numbers of users.
     """
-    ListUsers=idstoreclient.list_users(IdentityStoreId=IdentityStoreId)
-    ListOfUsers=ListUsers['Users']
-    while 'NextToken' in ListUsers.keys():
-        ListUsers=idstoreclient.list_users(IdentityStoreId=IdentityStoreId,NextToken=ListUsers['NextToken'])
-        ListOfUsers.extend(ListUsers['Users'])
+    ListUsers = idstoreclient.list_users(IdentityStoreId=IdentityStoreId)
+    ListOfUsers = ListUsers["Users"]
+    while "NextToken" in ListUsers.keys():
+        ListUsers = idstoreclient.list_users(
+            IdentityStoreId=IdentityStoreId, NextToken=ListUsers["NextToken"]
+        )
+        ListOfUsers.extend(ListUsers["Users"])
     for eachUser in ListOfUsers:
-        users.update({eachUser.get('UserId'):eachUser.get('UserName')})
+        users.update({eachUser.get("UserId"): eachUser.get("UserName")})
 
 
 def mapGroupIDs():
@@ -49,13 +51,15 @@ def mapGroupIDs():
     Note:
         This function uses pagination to handle large numbers of groups.
     """
-    ListGroups=idstoreclient.list_groups(IdentityStoreId=IdentityStoreId)
-    ListOfGroups=ListGroups['Groups']
-    while 'NextToken' in ListGroups.keys():
-        ListGroups=idstoreclient.list_groups(IdentityStoreId=IdentityStoreId,NextToken=ListGroups['NextToken'])
-        ListOfGroups.extend(ListGroups['Groups'])
+    ListGroups = idstoreclient.list_groups(IdentityStoreId=IdentityStoreId)
+    ListOfGroups = ListGroups["Groups"]
+    while "NextToken" in ListGroups.keys():
+        ListGroups = idstoreclient.list_groups(
+            IdentityStoreId=IdentityStoreId, NextToken=ListGroups["NextToken"]
+        )
+        ListOfGroups.extend(ListGroups["Groups"])
     for eachGroup in ListOfGroups:
-        groups.update({eachGroup.get('GroupId'):eachGroup.get('DisplayName')})
+        groups.update({eachGroup.get("GroupId"): eachGroup.get("DisplayName")})
 
 
 def GetDescription(permissionSet):
@@ -68,7 +72,7 @@ def GetDescription(permissionSet):
     Returns:
         str: The description of the permission set if available, otherwise an empty string.
     """
-    return permissionSet.get('Description') if 'Description' in permissionSet else ''
+    return permissionSet.get("Description") if "Description" in permissionSet else ""
 
 
 def mapPermissionSetIDs():
@@ -90,37 +94,49 @@ def mapPermissionSetIDs():
         This function uses pagination to handle large numbers of permission sets.
         TODO: Implement pagination for managed policies and customer managed policies.
     """
-    ListPermissionSets=ssoadminclient.list_permission_sets(InstanceArn=InstanceARN)
-    ListOfPermissionSets=ListPermissionSets['PermissionSets']
-    while 'NextToken' in ListPermissionSets.keys():
-        ListPermissionSets=ssoadminclient.list_permission_sets(InstanceArn=InstanceARN,NextToken=ListPermissionSets['NextToken'])
-        ListOfPermissionSets.extend(ListPermissionSets['PermissionSets'])
+    ListPermissionSets = ssoadminclient.list_permission_sets(InstanceArn=InstanceARN)
+    ListOfPermissionSets = ListPermissionSets["PermissionSets"]
+    while "NextToken" in ListPermissionSets.keys():
+        ListPermissionSets = ssoadminclient.list_permission_sets(
+            InstanceArn=InstanceARN, NextToken=ListPermissionSets["NextToken"]
+        )
+        ListOfPermissionSets.extend(ListPermissionSets["PermissionSets"])
     for eachPermissionSet in ListOfPermissionSets:
-        permissionSetDescription=ssoadminclient.describe_permission_set(InstanceArn=InstanceARN,PermissionSetArn=eachPermissionSet)
-        permissionSetDetails=permissionSetDescription.get('PermissionSet')
+        permissionSetDescription = ssoadminclient.describe_permission_set(
+            InstanceArn=InstanceARN, PermissionSetArn=eachPermissionSet
+        )
+        permissionSetDetails = permissionSetDescription.get("PermissionSet")
 
-        # Get Managed policies --> TODO: Deal with pagination 
+        # Get Managed policies --> TODO: Deal with pagination
         managedPolicies = ssoadminclient.list_managed_policies_in_permission_set(
-            InstanceArn=InstanceARN,
-            PermissionSetArn=eachPermissionSet
+            InstanceArn=InstanceARN, PermissionSetArn=eachPermissionSet
         )
 
-        # Get Customer Managed Policies --> TODO: Deal with pagination 
-        customerManagedPolicies = ssoadminclient.list_customer_managed_policy_references_in_permission_set(
-            InstanceArn=InstanceARN,
-            PermissionSetArn=eachPermissionSet
+        # Get Customer Managed Policies --> TODO: Deal with pagination
+        customerManagedPolicies = (
+            ssoadminclient.list_customer_managed_policy_references_in_permission_set(
+                InstanceArn=InstanceARN, PermissionSetArn=eachPermissionSet
+            )
         )
-        
+
         permissionSet = {
-            'Id': eachPermissionSet.split('/')[-1],
-            'Description': GetDescription(permissionSet=permissionSetDetails),
-            'PermissionSetArn': permissionSetDetails.get('PermissionSetArn'),
-            'ManagedPolicies': managedPolicies.get('AttachedManagedPolicies'),
-            'CustomerManagedPolicies': customerManagedPolicies.get('CustomerManagedPolicyReferences')
+            "Id": eachPermissionSet.split("/")[-1],
+            "Description": GetDescription(permissionSet=permissionSetDetails),
+            "PermissionSetArn": permissionSetDetails.get("PermissionSetArn"),
+            "ManagedPolicies": managedPolicies.get("AttachedManagedPolicies"),
+            "CustomerManagedPolicies": customerManagedPolicies.get(
+                "CustomerManagedPolicyReferences"
+            ),
         }
-        permissionSetsData.update({permissionSetDetails['Name']:permissionSet})
+        permissionSetsData.update({permissionSetDetails["Name"]: permissionSet})
 
-        permissionSets.update({permissionSetDetails.get('PermissionSetArn'):permissionSetDetails.get('Name')})
+        permissionSets.update(
+            {
+                permissionSetDetails.get("PermissionSetArn"): permissionSetDetails.get(
+                    "Name"
+                )
+            }
+        )
 
 
 def ListAccountsInOrganization():
@@ -134,14 +150,14 @@ def ListAccountsInOrganization():
     Note:
         This function uses pagination to handle large numbers of accounts.
     """
-    AccountsList=orgsclient.list_accounts()
-    ListOfAccounts=AccountsList['Accounts']
-    while 'NextToken' in AccountsList.keys():
-        AccountsList=orgsclient.list_accounts(NextToken=AccountsList['NextToken'])
-        ListOfAccounts.extend(AccountsList['Accounts'])
+    AccountsList = orgsclient.list_accounts()
+    ListOfAccounts = AccountsList["Accounts"]
+    while "NextToken" in AccountsList.keys():
+        AccountsList = orgsclient.list_accounts(NextToken=AccountsList["NextToken"])
+        ListOfAccounts.extend(AccountsList["Accounts"])
     for eachAccount in ListOfAccounts:
-        #Accounts.append(str(eachAccount.get('Id')))
-        Accounts.update({eachAccount.get('Id'):eachAccount.get('Name')})
+        # Accounts.append(str(eachAccount.get('Id')))
+        Accounts.update({eachAccount.get("Id"): eachAccount.get("Name")})
 
 
 def GetPermissionSetsProvisionedToAccount(AccountID):
@@ -157,16 +173,30 @@ def GetPermissionSetsProvisionedToAccount(AccountID):
     Note:
         This function uses pagination to handle large numbers of permission sets.
     """
-    ListOfPermissionSetsProvisionedToAccount=[]
-    PermissionSetsProvisionedToAccount=ssoadminclient.list_permission_sets_provisioned_to_account(InstanceArn=InstanceARN,AccountId=AccountID)
+    ListOfPermissionSetsProvisionedToAccount = []
+    PermissionSetsProvisionedToAccount = (
+        ssoadminclient.list_permission_sets_provisioned_to_account(
+            InstanceArn=InstanceARN, AccountId=AccountID
+        )
+    )
     try:
-        ListOfPermissionSetsProvisionedToAccount = PermissionSetsProvisionedToAccount['PermissionSets']
-        while 'NextToken' in PermissionSetsProvisionedToAccount.keys():
-            PermissionSetsProvisionedToAccount=ssoadminclient.list_permission_sets_provisioned_to_account(InstanceArn=InstanceARN,AccountId=AccountID,NextToken=PermissionSetsProvisionedToAccount['NextToken'])
-            ListOfPermissionSetsProvisionedToAccount.extend(PermissionSetsProvisionedToAccount['PermissionSets'])
-        return(ListOfPermissionSetsProvisionedToAccount)
+        ListOfPermissionSetsProvisionedToAccount = PermissionSetsProvisionedToAccount[
+            "PermissionSets"
+        ]
+        while "NextToken" in PermissionSetsProvisionedToAccount.keys():
+            PermissionSetsProvisionedToAccount = (
+                ssoadminclient.list_permission_sets_provisioned_to_account(
+                    InstanceArn=InstanceARN,
+                    AccountId=AccountID,
+                    NextToken=PermissionSetsProvisionedToAccount["NextToken"],
+                )
+            )
+            ListOfPermissionSetsProvisionedToAccount.extend(
+                PermissionSetsProvisionedToAccount["PermissionSets"]
+            )
+        return ListOfPermissionSetsProvisionedToAccount
     except:
-        return(ListOfPermissionSetsProvisionedToAccount)
+        return ListOfPermissionSetsProvisionedToAccount
 
 
 def ListAccountAssignments(AccountID):
@@ -185,40 +215,45 @@ def ListAccountAssignments(AccountID):
     Note:
         This function uses pagination to handle large numbers of assignments.
     """
-    PermissionSetsList=GetPermissionSetsProvisionedToAccount(AccountID)
-    Assignments=[]
+    PermissionSetsList = GetPermissionSetsProvisionedToAccount(AccountID)
+    Assignments = []
     for permissionSet in PermissionSetsList:
-        AccountAssignments=ssoadminclient.list_account_assignments(InstanceArn=InstanceARN,AccountId=AccountID,PermissionSetArn=permissionSet)
-        Assignments.extend(AccountAssignments['AccountAssignments'])
-        while 'NextToken' in AccountAssignments.keys():
-            AccountAssignments=ssoadminclient.list_aaccount_assignments(InstanceArn=InstanceARN,AccountId=AccountID,PermissionSetArn=permissionSet,NextToken=AccountAssignments['NextToken'])
-            Assignments.extend(AccountAssignments['AccountAssignments'])
-    return(Assignments)
+        AccountAssignments = ssoadminclient.list_account_assignments(
+            InstanceArn=InstanceARN, AccountId=AccountID, PermissionSetArn=permissionSet
+        )
+        Assignments.extend(AccountAssignments["AccountAssignments"])
+        while "NextToken" in AccountAssignments.keys():
+            AccountAssignments = ssoadminclient.list_aaccount_assignments(
+                InstanceArn=InstanceARN,
+                AccountId=AccountID,
+                PermissionSetArn=permissionSet,
+                NextToken=AccountAssignments["NextToken"],
+            )
+            Assignments.extend(AccountAssignments["AccountAssignments"])
+    return Assignments
+
 
 def ListApplications():
     """
     Create a report of all the applications configured in IdC.
     """
-    ListOfApplications=[]
-    Applications=ssoadminclient.list_applications(
-        InstanceArn=InstanceARN
-    )
-    ListOfApplications.extend(Applications['Applications'])
-    while 'NextToken' in Applications.keys():
-        Applications=ssoadminclient.list_applications(
-            InstanceArn=InstanceARN,
-            NextToken=Applications['NextToken']
+    ListOfApplications = []
+    Applications = ssoadminclient.list_applications(InstanceArn=InstanceARN)
+    ListOfApplications.extend(Applications["Applications"])
+    while "NextToken" in Applications.keys():
+        Applications = ssoadminclient.list_applications(
+            InstanceArn=InstanceARN, NextToken=Applications["NextToken"]
         )
-        ListOfApplications.extend(Applications['Applications'])
-    # For each app add scope, assignment and auth information
+        ListOfApplications.extend(Applications["Applications"])
+    # For each app add scope, assignment and auth information
     for app in ListOfApplications:
-        AppARN = app['ApplicationArn']
+        AppARN = app["ApplicationArn"]
         # Get application details
-        AppDetails = ssoadminclient.describe_application(
-            ApplicationArn=AppARN
-        )
+        AppDetails = ssoadminclient.describe_application(ApplicationArn=AppARN)
         # Substitute datetime by string
-        AppDetails['CreatedDate'] = AppDetails['CreatedDate'].strftime("%Y-%m-%d %H:%M:%S")
+        AppDetails["CreatedDate"] = AppDetails["CreatedDate"].strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
         # Get assignment configuration
         AppAssignment = ssoadminclient.get_application_assignment_configuration(
@@ -235,34 +270,33 @@ def ListApplications():
 
         # Get application assignments
         AppAssignments = []
-        assignments = ssoadminclient.list_application_assignments(
-            ApplicationArn=AppARN
-        )
-        AppAssignments.extend(assignments['ApplicationAssignments'])
-        
+        assignments = ssoadminclient.list_application_assignments(ApplicationArn=AppARN)
+        AppAssignments.extend(assignments["ApplicationAssignments"])
+
         # Handle pagination for assignments
-        while 'NextToken' in assignments:
+        while "NextToken" in assignments:
             assignments = ssoadminclient.list_application_assignments(
-                ApplicationArn=AppARN,
-                NextToken=assignments['NextToken']
+                ApplicationArn=AppARN, NextToken=assignments["NextToken"]
             )
-            AppAssignments.extend(assignments['ApplicationAssignments'])
+            AppAssignments.extend(assignments["ApplicationAssignments"])
 
         # Build application configuration object
         AppConfig = {
-            'ApplicationDetails': AppDetails,
-            'AssignmentConfiguration': AppAssignment,
-            'AuthenticationMethod': AppAuthMethod,
-            'Assignments': [
+            "ApplicationDetails": AppDetails,
+            "AssignmentConfiguration": AppAssignment,
+            "AuthenticationMethod": AppAuthMethod,
+            "Assignments": [
                 {
-                    'PrincipalId': assignment.get('PrincipalId'),
-                    'PrincipalType': assignment.get('PrincipalType'),
-                    'PrincipalName': users.get(assignment.get('PrincipalId')) 
-                        if assignment.get('PrincipalType') == 'USER' 
-                        else groups.get(assignment.get('PrincipalId'))
+                    "PrincipalId": assignment.get("PrincipalId"),
+                    "PrincipalType": assignment.get("PrincipalType"),
+                    "PrincipalName": (
+                        users.get(assignment.get("PrincipalId"))
+                        if assignment.get("PrincipalType") == "USER"
+                        else groups.get(assignment.get("PrincipalId"))
+                    ),
                 }
                 for assignment in AppAssignments
-            ]
+            ],
         }
         applications.append(AppConfig)
 
@@ -274,11 +308,13 @@ class SetEncoder(json.JSONEncoder):
     This encoder extends the default JSON encoder to properly serialize set objects
     by converting them to lists.
     """
+
     def default(self, obj):
         if isinstance(obj, set):
             return list(obj)
         return json.JSONEncoder.default(self, obj)
-    
+
+
 def GenerateFiles():
     """
     Generate CSV and JSON reports based on AWS IAM Identity Center (formerly AWS SSO) assignments.
@@ -308,7 +344,7 @@ def GenerateFiles():
     - Assignment configuration
     - Authentication method
     - Assignments (users and groups)
-    ... 
+    ...
 
     Raises:
         Exception: If there's an error processing a specific account ID.
@@ -317,41 +353,48 @@ def GenerateFiles():
         This function relies on several global variables and helper functions
         that should be initialized and defined before calling this function.
     """
-    ListOfAccountIDs=list(Accounts.keys())
-    entries=[]
+    ListOfAccountIDs = list(Accounts.keys())
+    entries = []
     for eachAccountID in ListOfAccountIDs:
         try:
-            GetAccountAssignments=ListAccountAssignments(eachAccountID)
+            GetAccountAssignments = ListAccountAssignments(eachAccountID)
             for eachAssignment in GetAccountAssignments:
-                entry=[]
-                entry.append(eachAssignment.get('AccountId'))
-                entry.append(Accounts.get(eachAssignment.get('AccountId')))
-                entry.append(permissionSets.get(eachAssignment.get('PermissionSetArn')))
-                entry.append(eachAssignment.get('PrincipalType'))
-                if(eachAssignment.get('PrincipalType')=='GROUP'):
-                    entry.append(groups.get(eachAssignment.get('PrincipalId')))
+                entry = []
+                entry.append(eachAssignment.get("AccountId"))
+                entry.append(Accounts.get(eachAssignment.get("AccountId")))
+                entry.append(permissionSets.get(eachAssignment.get("PermissionSetArn")))
+                entry.append(eachAssignment.get("PrincipalType"))
+                if eachAssignment.get("PrincipalType") == "GROUP":
+                    entry.append(groups.get(eachAssignment.get("PrincipalId")))
                 else:
-                    entry.append(users.get(eachAssignment.get('PrincipalId')))
+                    entry.append(users.get(eachAssignment.get("PrincipalId")))
                 entries.append(entry)
         except Exception as e:
             print("Error in Account ID: " + eachAccountID + " " + str(e))
             continue
 
-    headers=['Account ID', 'Account Name', 'Permission Set','Principal Type', 'Principal']
+    headers = [
+        "Account ID",
+        "Account Name",
+        "Permission Set",
+        "Principal Type",
+        "Principal",
+    ]
 
-    with open( "output/OldIdentityStoreReport.csv", 'w') as report:
+    with open("output/OldIdentityStoreReport.csv", "x") as report:
         csvwriter = csv.writer(report)
         csvwriter.writerow(headers)
         csvwriter.writerows(entries)
     print("Done! 'OldIdentityStoreReport.csv' report is generated successfully!")
 
-    with open('output/OldPermissionSets.json', 'w') as fp:
+    with open("output/OldPermissionSets.json", "x") as fp:
         json.dump(permissionSetsData, fp, cls=SetEncoder)
     print("Done! 'OldPermissionSets.json' has been generated successfully!")
 
-    with open('output/OldApplications.json', 'w') as fp:
+    with open("output/OldApplications.json", "x") as fp:
         json.dump(applications, fp, cls=SetEncoder, indent=2)
     print("Done! 'OldApplications.json' has been generated successfully!")
+
 
 # MAIN
 mapUserIDs()
