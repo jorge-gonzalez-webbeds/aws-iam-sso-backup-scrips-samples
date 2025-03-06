@@ -22,3 +22,4 @@
 - https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-considerations.html#changing-from-one-idp-to-another-idp
 - https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html
 - https://docs.aws.amazon.com/singlesignon/latest/userguide/idp-microsoft-entra.html
+- https://learn.microsoft.com/en-us/entra/identity/saas-apps/amazon-web-service-tutorial#aws-single-account-access-architecture
