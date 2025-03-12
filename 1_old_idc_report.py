@@ -1,9 +1,14 @@
 import boto3, json, csv
 
-session = boto3.Session(profile_name="webbeds-idp")
+DEFAULT_REGION = "eu-west-1"
 
-idstoreclient = session.client("identitystore")
-ssoadminclient = session.client("sso-admin")
+session = boto3.Session(
+    aws_access_key_id="",
+    aws_secret_access_key="",
+)
+
+idstoreclient = session.client("identitystore", region_name=DEFAULT_REGION)
+ssoadminclient = session.client("sso-admin", region_name=DEFAULT_REGION)
 orgsclient = session.client("organizations")
 
 users = {}
